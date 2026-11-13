@@ -5,20 +5,64 @@
 # layers. Chapter text (`description`) is HTML, not Markdown.
 type: scrollytelling
 id: nyc-story
-theme: light           # chapter cards: light or dark
+theme: light
+cameraOffset: false
+projection:
+  type: globe
+           # chapter cards: light or dark
 showMarkers: true      # a dot per chapter at the right edge; click one to jump
 markerColor: "#000000"  # color of the chapter markers
 
 # The map when the page opens.
+
 config:
-  mapStyle: "https://tiles.openfreemap.org/styles/positron"
-  center: [-74.0060, 40.7128]
-  zoom: 10
-  interactive: false   # scrolling moves the story, not the map
+  mapStyle:
+    version: 8
+    sources:
+      satellite:
+        type: raster
+        url: "https://api.maptiler.com/tiles/satellite-v2/tiles.json?key=Reh8zANfAiDQXPWmTT2r"
+        tileSize: 512
+    layers:
+      - id: satellite
+        type: raster
+        source: satellite
+
+  center: [-42.0, 72.0]
+  zoom: 4
+  interactive: false
 
 # Every layer the story uses. A layer that a chapter reveals later starts
 # hidden with `layout: { visibility: none }`.
 layers:
+  - id: Greenland_Bed_Visual
+    type: raster
+    source:
+      type: raster
+      tiles:
+        - "Greenaland_Bed_Visual/{z}/{x}/{y}.png"
+      tileSize: 256
+      minzoom: 0
+      maxzoom: 7
+    layout:
+      visibility: none
+    paint:
+      raster-opacity: 0.85
+
+  - id: stream-ice-8000
+    type: line
+    source:
+      type: geojson
+      url: "data/stream-ice-8000.geojson"
+    layout:
+      visibility: none
+      line-join: round
+      line-cap: round
+    paint:
+      line-color: "#36D9FF"
+      line-width: 0.5
+      line-opacity: 0.85
+
   - id: squirrels
     type: circle
     source:
@@ -54,44 +98,64 @@ layers:
 
 chapters:
   - id: intro
-    title: Introduction
+    title: Matter, Unwritten
     description: >-
-      <p>Welcome to the scrollytelling example. Each chapter sets the camera
-      with <code>center</code>, <code>zoom</code>, <code>pitch</code> and
-      <code>bearing</code>. Scroll down.</p>
-    center: [-74.0060, 40.7128]
-    zoom: 10
-    alignment: center
-
-  - id: squirrels
-    title: Squirrels in Central Park
-    description: >-
-      <p>Now we zoom in, and this chapter turns on a layer loaded from a GeoJSON
-      file in <code>data/</code> with
-      <code>layers: { show: [squirrels] }</code>.</p>
-    center: [-73.96778, 40.78376]
-    zoom: 14
-    bearing: 20
+      <p>Greenland's vast ice sheet appears still, yet beneath its
+      surface lies a dynamic landscape shaped by ice, water, and
+      geological processes.</p>
+      <p>This interactive atlas reveals the hidden structures and
+      movements beneath the ice, tracing how unseen processes shape
+      the landscape and generate new material possibilities.</p>
+    center: [-42.0, 72.0]
+    zoom: 3
     alignment: left
     layers:
-      show: [squirrels]
+      hide: [Greenland_Bed_Visual]
 
-  - id: park
-    title: A polygon layer
+  - id: squirrels
+    title: Beneath the Ice
     description: >-
-      <p>This chapter hides the squirrels again and shows a polygon written
-      straight into the YAML. The camera tilts (<code>pitch: 45</code>) and
-      turns to line up with the park, and <code>animation: easeTo</code> moves
-      it without the zoom-out arc of the default <code>flyTo</code>.</p>
-    center: [-73.9654, 40.7829]
-    zoom: 13
-    pitch: 45
-    bearing: -61
-    animation: easeTo
-    alignment: right
+      <p>Greenland's vast ice sheet conceals a complex landscape of
+      mountains, valleys, and deep basins. Using NASA's BedMachine
+      Greenland v7 dataset, this map reveals the estimated elevation
+      of the bedrock beneath the ice, exposing a terrain normally
+      hidden from view.</p>
+      <p><small>Data Source: NASA / NSIDC — BedMachine Greenland v7</small></p>
+    center: [-42.0, 72.0]
+    zoom: 3
+    bearing: 0
+    alignment: left
     layers:
-      show: [central-park]
-      hide: [squirrels]
+      show: [Greenland_Bed_Visual]
+      hide: [stream-ice-8000]
+
+  - id: streams
+    title: Water in Motion
+    description: >-
+      <p>Beneath Greenland's ice sheet, meltwater travels
+      through a network of drainage pathways. This map
+      visualizes modelled stream paths, revealing the
+      hidden structure of water movement beneath the ice.</p>
+    center: [-42.0, 72.0]
+    zoom: 3
+    pitch: 0
+    bearing: 0
+    alignment: left
+    layers:
+      show: [stream-ice-8000]
+
+  - id: stream-detail
+    title: Following the Flow
+    description: >-
+      <p>Moving particles trace Greenland's modelled
+      drainage pathways beneath the ice.</p>
+    center: [-42.0, 72.0]
+    zoom: 5
+    pitch: 0
+    bearing: 0
+    alignment: left
+    layers:
+      show: [stream-ice-8000]
 
   - id: mississippi
     title: Pictures in a chapter
@@ -100,11 +164,12 @@ chapters:
       a file in <code>img/</code>. This is Harold Fisk's 1944 map of the
       Mississippi's ancient courses, near where the map has flown to.</p>
     image: "img/fisk02.jpg"
-    center: [-89.53, 36.59]
-    zoom: 9
-    pitch: 30
-    bearing: -10
-    alignment: left
+    center: [-42.0, 80.0]
+    zoom: 2.5
+    pitch: 0
+    bearing: 0
+    alignment: center
+
     layers:
       hide: [central-park]
 
@@ -114,11 +179,12 @@ chapters:
       <p><code>rotateAnimation: true</code> turns the camera slowly while this
       chapter is on screen. Edit <code>stories/nyc.yaml</code> to write
       your own story.</p>
-    center: [-73.99, 40.73]
-    zoom: 11
-    pitch: 50
-    rotateAnimation: true
-    alignment: full
+    center: [-42.0, 80.0]
+    zoom: 2.5
+    pitch: 0
+    bearing: 0
+    alignment: center
+
 
 footer: >-
   <p>Data: 2018 Central Park Squirrel Census (NYC Open Data). Basemap:

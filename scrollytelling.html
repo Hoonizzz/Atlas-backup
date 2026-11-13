@@ -1,28 +1,34 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- Without this line, phones lay the page out at desktop width and the story looks tiny. -->
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Scrollytelling | Project Website</title>
-  <meta name="description" content="A description of your website">
 
-  <!-- MapLibre's stylesheet. Keep it on the same major version (6) as the import map below. -->
+  <title>Matter, Unwritten | Greenland Atlas</title>
+  <meta name="description" content="An interactive atlas of Greenland's hidden landscape.">
+
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.css">
   <link rel="stylesheet" href="css/site.css">
-  <!-- Tells the browser where "maplibre-gl" lives. The story's map needs it. -->
+
   <script type="importmap">
-    { "imports": { "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs" } }
+    {
+      "imports": {
+        "maplibre-gl": "https://unpkg.com/maplibre-gl@6/dist/maplibre-gl.mjs"
+      }
+    }
   </script>
-  <!-- Defines <ml-map> and <ml-scrollytelling>. "@0.10" loads the newest 0.10.x release. -->
-  <script type="module" src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js"></script>
+
+  <script type="module"
+    src="https://unpkg.com/@maplibre-yaml/core@0.10/register.js">
+  </script>
 </head>
-<!-- class="bleed": no page padding and no footer, for a page that is one big story. -->
+
 <body class="bleed">
-  <!-- The header is copied into every page. Changing a link? Change it in all four .html files. -->
   <header class="site-header">
     <div class="container">
-      <a class="site-name" href="./">Project Website</a>
+      <a class="site-name" href="./">Matter, Unwritten</a>
+
       <nav class="site-nav">
         <a href="inline-maps.html">Inline maps</a>
         <a href="full-page-map.html">Full page map</a>
@@ -32,11 +38,304 @@
   </header>
 
   <main>
-    <!--
-      The story is stories/nyc.yaml: the map, its layers and every chapter.
-      Edit the YAML and reload the page.
-    -->
     <ml-scrollytelling src="stories/nyc.yaml"></ml-scrollytelling>
   </main>
+
+  <!-- STREAM PARTICLE ANIMATION -->
+  <script type="module">
+    const story = document.querySelector("ml-scrollytelling");
+
+    const SETTINGS = {
+      geojson: "data/stream-ice-8000.geojson",
+      chapter: "stream-detail",
+      particleCount: 3000,
+      speed: 1,
+      updateInterval: 30,
+      particleRadius: 2,
+      particleColor: "#A8F3FF"
+    };
+
+    const SOURCE_ID = "animated-water-source";
+    const LAYER_ID = "animated-water-particles";
+
+    const emptyGeoJSON = () => ({
+      type: "FeatureCollection",
+      features: []
+    });
+
+    let map;
+    let paths = [];
+    let particles = [];
+    let running = false;
+    let frameID = null;
+    let lastUpdate = 0;
+    let elapsed = 0;
+    let chapterToken = 0;
+    let pendingMoveEnd = null;
+
+    // Identify the active chapter as soon as it changes.
+    story.addEventListener("ml-scrollytelling:chapter", event => {
+      const chapterId = event.detail.chapterId;
+      handleChapter(chapterId);
+    });
+
+    // Prepare coordinates along each stream.
+    function addPath(coordinates) {
+      if (!Array.isArray(coordinates) || coordinates.length < 2) return;
+
+      const points = [];
+      const distances = [];
+      let total = 0;
+
+      for (const coordinate of coordinates) {
+        const lon = Number(coordinate[0]);
+        const lat = Number(coordinate[1]);
+
+        if (!Number.isFinite(lon) ||
+            !Number.isFinite(lat) ||
+            Math.abs(lat) > 90) continue;
+
+        if (points.length > 0) {
+          const previous = points[points.length - 1];
+
+          const dx = (lon - previous[0]) *
+            Math.cos((lat + previous[1]) * Math.PI / 360);
+
+          const dy = lat - previous[1];
+          total += Math.hypot(dx, dy);
+        }
+
+        points.push([lon, lat]);
+        distances.push(total);
+      }
+
+      if (points.length > 1 && total > 0) {
+        paths.push({ points, distances, total });
+      }
+    }
+
+    // Find an interpolated point on a stream.
+    function pointAlongPath(path, fraction) {
+      const target = fraction * path.total;
+      const distances = path.distances;
+
+      let low = 1;
+      let high = distances.length - 1;
+
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+
+        if (distances[middle] < target) {
+          low = middle + 1;
+        } else {
+          high = middle;
+        }
+      }
+
+      const index = low;
+      const start = path.points[index - 1];
+      const end = path.points[index];
+
+      const segment = distances[index] - distances[index - 1];
+
+      const t = segment > 0
+        ? (target - distances[index - 1]) / segment
+        : 0;
+
+      return [
+        start[0] + (end[0] - start[0]) * t,
+        start[1] + (end[1] - start[1]) * t
+      ];
+    }
+
+    function createParticles() {
+      particles = Array.from(
+        { length: SETTINGS.particleCount },
+        () => ({
+          path: paths[Math.floor(Math.random() * paths.length)],
+          progress: Math.random(),
+          velocity: 0.5 + Math.random()
+        })
+      );
+    }
+
+    // Draw the updated particle positions.
+    function drawParticles(timestamp) {
+      if (!running) return;
+
+      if (timestamp - lastUpdate >= SETTINGS.updateInterval) {
+        const dt = lastUpdate
+          ? Math.min((timestamp - lastUpdate) / 1000, 0.1)
+          : 0;
+
+        elapsed += dt;
+        lastUpdate = timestamp;
+
+        const features = particles.map(particle => {
+          const progress = (
+            particle.progress +
+            elapsed * SETTINGS.speed * particle.velocity
+          ) % 1;
+
+          return {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "Point",
+              coordinates: pointAlongPath(particle.path, progress)
+            }
+          };
+        });
+
+        const source = map.getSource(SOURCE_ID);
+
+        if (source) {
+          source.setData({
+            type: "FeatureCollection",
+            features
+          });
+        }
+      }
+
+      frameID = requestAnimationFrame(drawParticles);
+    }
+
+    function stopParticles() {
+      running = false;
+
+      if (frameID !== null) {
+        cancelAnimationFrame(frameID);
+        frameID = null;
+      }
+
+      lastUpdate = 0;
+
+      if (map && map.getSource(SOURCE_ID)) {
+        map.getSource(SOURCE_ID).setData(emptyGeoJSON());
+      }
+    }
+
+    function startParticles() {
+      if (running || !map || particles.length === 0) return;
+      if (document.hidden) return;
+
+      running = true;
+      lastUpdate = 0;
+      frameID = requestAnimationFrame(drawParticles);
+    }
+
+    // Start only after zooming has finished.
+    function handleChapter(chapterId) {
+      const token = ++chapterToken;
+
+      if (map && pendingMoveEnd) {
+        map.off("moveend", pendingMoveEnd);
+        pendingMoveEnd = null;
+      }
+
+      stopParticles();
+
+      if (chapterId !== SETTINGS.chapter || !map) return;
+
+      // Ignore camera movements that belong to older chapters.
+      const beginAfterZoom = () => {
+        pendingMoveEnd = null;
+
+        if (
+          token === chapterToken &&
+          story.activeChapterId === SETTINGS.chapter &&
+          !map.isMoving()
+        ) {
+          startParticles();
+        }
+      };
+
+      if (map.isMoving()) {
+        pendingMoveEnd = beginAfterZoom;
+        map.once("moveend", pendingMoveEnd);
+      } else {
+        // Allow the story to initiate its camera transition.
+        requestAnimationFrame(() => {
+          if (token !== chapterToken) return;
+
+          if (map.isMoving()) {
+            pendingMoveEnd = beginAfterZoom;
+            map.once("moveend", pendingMoveEnd);
+          } else {
+            beginAfterZoom();
+          }
+        });
+      }
+    }
+
+    async function initialize() {
+      try {
+        map = await story.mapReady();
+
+        map.addSource(SOURCE_ID, {
+          type: "geojson",
+          data: emptyGeoJSON()
+        });
+
+        map.addLayer({
+          id: LAYER_ID,
+          type: "circle",
+          source: SOURCE_ID,
+          paint: {
+            "circle-radius": SETTINGS.particleRadius,
+            "circle-color": SETTINGS.particleColor,
+            "circle-opacity": 0.95,
+            "circle-blur": 0.2
+          }
+        });
+
+        const response = await fetch(SETTINGS.geojson);
+
+        if (!response.ok) {
+          throw new Error("GeoJSON load failed: " + response.status);
+        }
+
+        const data = await response.json();
+
+        for (const feature of data.features || []) {
+          const geometry = feature.geometry;
+          if (!geometry) continue;
+
+          if (geometry.type === "LineString") {
+            addPath(geometry.coordinates);
+          } else if (geometry.type === "MultiLineString") {
+            for (const line of geometry.coordinates) {
+              addPath(line);
+            }
+          }
+        }
+
+        if (paths.length === 0) {
+          throw new Error("No usable stream paths found.");
+        }
+
+        createParticles();
+
+        console.log("Stream paths:", paths.length);
+        console.log("Particles:", particles.length);
+
+        // Initialize the current chapter after data loading.
+        handleChapter(story.activeChapterId);
+
+      } catch (error) {
+        console.error("Particle animation error:", error);
+      }
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopParticles();
+      } else if (map) {
+        handleChapter(story.activeChapterId);
+      }
+    });
+
+    initialize();
+  </script>
 </body>
 </html>

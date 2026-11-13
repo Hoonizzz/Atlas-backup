@@ -368,3 +368,7 @@ html ml-scrollytelling {
 .home b {
   font-weight: 600;
 }
+/* Move only the text cards */
+ml-scrollytelling .scrolly-chapter.align-left .chapter-content {
+  transform: translateX(100px);
+}
